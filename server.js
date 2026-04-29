@@ -1,240 +1,129 @@
-<<<<<<< HEAD
-const http = require('http');
-const { Server } = require('socket.io');
+import express from 'express';
+import http from 'http';
+import { Server } from 'socket.io';
 
-const httpServer = http.createServer();
-const io = new Server(httpServer, { cors: { origin: '*' } });
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+app.use(express.static('public'));
 
 const rooms = new Map();
 
-function getOrCreateRoom(roomId) {
+function createDeck() {
+  const suits = ['♠', '♥', '♦', '♣'];
+  const ranks = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+  const deck = [];
+  for (const s of suits) for (const r of ranks) deck.push(`${r}${s}`);
+  return deck.sort(() => Math.random() - 0.5);
+}
+
+function getRoom(roomId) {
   if (!rooms.has(roomId)) {
     rooms.set(roomId, {
-      roomId,
       players: [],
+      hands: {},
       turnIndex: 0,
-      phase: 'playing',
-      currentTrick: [],
-      passesInRow: 0,
-      lastPlayPlayerId: null,
-      finishedPlayers: [],
-      scores: {},
+      tableCard: null,
+      chat: []
     });
   }
   return rooms.get(roomId);
 }
 
-function nextActiveTurn(room) {
-  if (!room.players.length) return;
-  let i = room.turnIndex;
-  for (let n = 0; n < room.players.length; n += 1) {
-    i = (i + 1) % room.players.length;
-    const p = room.players[i];
-    if (p.hand.length > 0 && !room.finishedPlayers.includes(p.id)) {
-      room.turnIndex = i;
-      return;
-    }
-  }
-}
+function emitState(roomId) {
+  const room = rooms.get(roomId);
+  if (!room) return;
 
-function checkRoundEnd(room) {
-  if (room.phase === 'ended') return true;
-
-  const finishedCount = room.finishedPlayers.length;
-  const teamRanks = new Map();
-  room.finishedPlayers.forEach((playerId, rankIdx) => {
-    const player = room.players.find((p) => p.id === playerId);
-    if (!player) return;
-    if (!teamRanks.has(player.team)) teamRanks.set(player.team, []);
-    teamRanks.get(player.team).push(rankIdx + 1);
+  io.to(roomId).emit('room:update', {
+    players: room.players,
+    turnPlayerId: room.players[room.turnIndex] || null,
+    tableCard: room.tableCard
   });
 
-  let winningTeam = null;
-  for (const [team, ranks] of teamRanks.entries()) {
-    if (ranks.includes(1) && ranks.includes(2)) {
-      winningTeam = team;
-      break;
-    }
+  for (const playerId of room.players) {
+    io.to(playerId).emit('hand:update', room.hands[playerId] || []);
   }
-
-  if (winningTeam || finishedCount >= 3) {
-    room.phase = 'ended';
-    io.to(room.roomId).emit('round_end', {
-      roomId: room.roomId,
-      finishedPlayers: [...room.finishedPlayers],
-      winningTeam,
-      reason: winningTeam ? 'team_1st_2nd' : 'three_finished',
-    });
-    return true;
-  }
-
-  return false;
-}
-
-function endTrick(room) {
-  if (!room.lastPlayPlayerId) return;
-  const winnerIdx = room.players.findIndex((p) => p.id === room.lastPlayPlayerId);
-  if (winnerIdx >= 0) room.turnIndex = winnerIdx;
-
-  io.to(room.roomId).emit('trick_end', {
-    winnerPlayerId: room.lastPlayPlayerId,
-    currentTrick: [...room.currentTrick],
-  });
-
-  room.currentTrick = [];
-  room.passesInRow = 0;
-  room.lastPlayPlayerId = null;
 }
 
 io.on('connection', (socket) => {
-  socket.on('join_room', ({ roomId, playerId, team, hand = [] }) => {
-    const room = getOrCreateRoom(roomId);
+  socket.on('room:join', ({ roomId, nickname }) => {
+    const room = getRoom(roomId);
+    if (room.players.length >= 4) {
+      socket.emit('error:message', '방이 가득 찼습니다.');
+      return;
+    }
+
+    socket.data.nickname = nickname || 'Player';
+    socket.data.roomId = roomId;
+
+    room.players.push(socket.id);
     socket.join(roomId);
 
-    const exists = room.players.some((p) => p.id === playerId);
-    if (!exists) room.players.push({ id: playerId, team, hand: [...hand] });
+    io.to(roomId).emit('chat:new', `${socket.data.nickname} 입장`);
 
-    io.to(roomId).emit('room_state', room);
+    if (room.players.length === 4) {
+      const deck = createDeck();
+      room.players.forEach((pid, idx) => {
+        room.hands[pid] = deck.slice(idx * 8, idx * 8 + 8);
+      });
+      room.turnIndex = 0;
+      io.to(roomId).emit('chat:new', '게임 시작! 첫 번째 플레이어 턴');
+    }
+
+    emitState(roomId);
   });
 
-  socket.on('play_card', ({ roomId, playerId, card }) => {
+  socket.on('card:play', (card) => {
+    const roomId = socket.data.roomId;
     const room = rooms.get(roomId);
-    if (!room || room.phase !== 'playing') return;
+    if (!room) return;
 
-    const current = room.players[room.turnIndex];
-    if (!current || current.id !== playerId) return;
+    const currentTurnPlayer = room.players[room.turnIndex];
+    if (currentTurnPlayer !== socket.id) return;
 
-    const handIndex = current.hand.findIndex((c) => c === card);
-    if (handIndex < 0) return;
+    const hand = room.hands[socket.id] || [];
+    const idx = hand.indexOf(card);
+    if (idx === -1) return;
 
-    current.hand.splice(handIndex, 1);
-    room.currentTrick.push({ playerId, card });
-    room.passesInRow = 0;
-    room.lastPlayPlayerId = playerId;
+    hand.splice(idx, 1);
+    room.tableCard = { card, by: socket.data.nickname };
 
-    if (current.hand.length === 0 && !room.finishedPlayers.includes(playerId)) {
-      room.finishedPlayers.push(playerId);
-    }
+    room.turnIndex = (room.turnIndex + 1) % room.players.length;
+    io.to(roomId).emit('chat:new', `${socket.data.nickname} played ${card}`);
 
-    if (!checkRoundEnd(room)) {
-      nextActiveTurn(room);
-      io.to(roomId).emit('turn_changed', {
-        playerId: room.players[room.turnIndex]?.id,
-      });
-    }
-
-    io.to(roomId).emit('room_state', room);
+    emitState(roomId);
   });
 
-  socket.on('pass_turn', ({ roomId, playerId }) => {
+  socket.on('chat:send', (message) => {
+    const roomId = socket.data.roomId;
+    if (!roomId) return;
+    io.to(roomId).emit('chat:new', `${socket.data.nickname}: ${message}`);
+  });
+
+  socket.on('disconnect', () => {
+    const roomId = socket.data.roomId;
+    if (!roomId) return;
+
     const room = rooms.get(roomId);
-    if (!room || room.phase !== 'playing') return;
+    if (!room) return;
 
-    const current = room.players[room.turnIndex];
-    if (!current || current.id !== playerId) return;
+    room.players = room.players.filter((p) => p !== socket.id);
+    delete room.hands[socket.id];
 
-    room.passesInRow += 1;
-    io.to(roomId).emit('turn_passed', { playerId, passesInRow: room.passesInRow });
+    io.to(roomId).emit('chat:new', `${socket.data.nickname || 'Player'} 퇴장`);
 
-    if (room.passesInRow === 3) {
-      endTrick(room);
-    } else {
-      nextActiveTurn(room);
-      io.to(roomId).emit('turn_changed', {
-        playerId: room.players[room.turnIndex]?.id,
-      });
+    if (room.players.length === 0) {
+      rooms.delete(roomId);
+      return;
     }
 
-    if (!checkRoundEnd(room)) {
-      io.to(roomId).emit('room_state', room);
-    }
+    room.turnIndex = Math.min(room.turnIndex, room.players.length - 1);
+    emitState(roomId);
   });
 });
 
 const PORT = process.env.PORT || 3000;
-httpServer.listen(PORT, () => {
-  console.log(`Server listening on ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });
-=======
-const { analyze, canBeat } = require('./game-logic');
-
-function createServer(io) {
-  const gameState = {
-    players: new Map(),
-    currentTurn: null,
-    currentTrick: null,
-  };
-
-  io.on('connection', (socket) => {
-    socket.on('register', ({ playerId, hand = [] }) => {
-      gameState.players.set(socket.id, {
-        playerId,
-        hand: [...hand],
-      });
-      if (!gameState.currentTurn) {
-        gameState.currentTurn = socket.id;
-      }
-    });
-
-    socket.on('play_cards', ({ cards = [] }) => {
-      const player = gameState.players.get(socket.id);
-      if (!player) return;
-
-      if (gameState.currentTurn !== socket.id) {
-        socket.emit('action_error', { code: 'NOT_TURN' });
-        return;
-      }
-
-      const handSet = new Set(player.hand);
-      const ownsAllCards = cards.every((card) => handSet.has(card));
-      if (!ownsAllCards) {
-        socket.emit('action_error', { code: 'CARD_NOT_OWNED' });
-        return;
-      }
-
-      const combo = analyze(cards);
-      if (!combo.valid) {
-        socket.emit('action_error', { code: 'INVALID_COMBO' });
-        return;
-      }
-
-      const canBeatPrevious = canBeat(combo, gameState.currentTrick?.combo ?? null);
-      if (!canBeatPrevious) {
-        socket.emit('action_error', { code: 'CANNOT_BEAT' });
-        return;
-      }
-
-      const playedSet = new Set(cards);
-      player.hand = player.hand.filter((card) => !playedSet.has(card));
-
-      gameState.currentTrick = {
-        playerSocketId: socket.id,
-        cards: [...cards],
-        combo,
-      };
-
-      io.emit('card_played', {
-        playerId: player.playerId,
-        cards: [...cards],
-      });
-
-      const socketIds = [...gameState.players.keys()];
-      const currentIndex = socketIds.indexOf(socket.id);
-      const nextSocketId = socketIds[(currentIndex + 1) % socketIds.length];
-      gameState.currentTurn = nextSocketId;
-
-      io.emit('turn_changed', {
-        playerId: gameState.players.get(nextSocketId)?.playerId ?? null,
-      });
-    });
-  });
-
-  return {
-    gameState,
-  };
-}
-
-module.exports = {
-  createServer,
-};
->>>>>>> origin/main
