@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AIGAME</title>
+    <link rel="stylesheet" href="/public/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>AIGAME</h1>
+      <div id="statusBanner" class="status-banner" aria-live="polite"></div>
+    </header>
+
+    <main class="app-main">
+      <section id="lobbyPanel" class="panel panel-lobby active" aria-labelledby="lobbyTitle">
+        <h2 id="lobbyTitle">로비</h2>
+        <p>플레이어를 기다리는 중입니다.</p>
+        <div class="lobby-actions">
+          <button id="startBtn" type="button">게임 시작</button>
+        </div>
+      </section>
+
+      <section id="gamePanel" class="panel panel-game" aria-labelledby="gameTitle">
+        <h2 id="gameTitle">게임</h2>
+
+        <div class="game-meta-grid">
+          <div class="meta-card">
+            <h3>현재 트릭</h3>
+            <div id="currentTrick" class="meta-value">-</div>
+          </div>
+          <div class="meta-card">
+            <h3>패스 횟수</h3>
+            <div id="passCount" class="meta-value">0</div>
+          </div>
+          <div class="meta-card">
+            <h3>선언 상태</h3>
+            <div id="declarationState" class="meta-value">없음</div>
+          </div>
+        </div>
+
+        <section class="hand-section" aria-labelledby="handTitle">
+          <h3 id="handTitle">내 손패</h3>
+          <div id="handCards" class="hand-cards"></div>
+          <div class="hand-actions">
+            <button id="playBtn" type="button">Play</button>
+            <button id="passBtn" type="button" class="secondary">Pass</button>
+          </div>
+        </section>
+
+        <section class="log-section" aria-labelledby="logTitle">
+          <h3 id="logTitle">이벤트 로그</h3>
+          <ul id="eventLog" class="event-log" aria-live="polite"></ul>
+        </section>
+      </section>
+
+      <section id="resultPanel" class="panel panel-result" aria-labelledby="resultTitle">
+        <h2 id="resultTitle">결과</h2>
+        <p id="resultSummary">게임 결과가 여기에 표시됩니다.</p>
+        <button id="backToLobbyBtn" type="button">로비로 돌아가기</button>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
+
+    <script src="/public/app.js"></script>
+  </body>
+</html>
