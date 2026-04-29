@@ -1,0 +1,139 @@
+:root {
+  color-scheme: dark;
+  --bg: #14161a;
+  --panel: #1e222a;
+  --text: #f5f6f8;
+  --muted: #a5adbb;
+  --accent: #5ea2ff;
+  --danger: #ff6c7a;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app-header {
+  padding: 1rem;
+  border-bottom: 1px solid #2e3440;
+}
+
+.status-banner {
+  margin-top: 0.5rem;
+  color: var(--muted);
+}
+
+.app-main {
+  padding: 1rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.panel {
+  display: none;
+  background: var(--panel);
+  border: 1px solid #2d3340;
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.panel.active { display: block; }
+
+.game-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.meta-card {
+  background: #232938;
+  padding: 0.75rem;
+  border-radius: 8px;
+}
+
+.meta-value { font-size: 1.1rem; font-weight: 600; }
+
+.hand-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.card-btn {
+  border: 1px solid #3d4557;
+  background: #171b24;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+}
+
+.card-btn.selected {
+  border-color: var(--accent);
+  outline: 2px solid rgba(94, 162, 255, 0.4);
+}
+
+.hand-actions { display: flex; gap: 0.5rem; }
+button {
+  background: var(--accent);
+  color: #051a38;
+  border: none;
+  border-radius: 8px;
+  padding: 0.55rem 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+button.secondary {
+  background: #2e3443;
+  color: #dce4f3;
+}
+
+.event-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.event-log li {
+  background: #181c25;
+  border-radius: 6px;
+  padding: 0.45rem 0.55rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  max-width: 320px;
+  background: #3a1218;
+  border: 1px solid #8a2834;
+  color: #ffdbe0;
+  padding: 0.7rem 0.8rem;
+  border-radius: 8px;
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity 150ms, transform 150ms;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+  .app-main { padding: 0.75rem; }
+  .game-meta-grid { grid-template-columns: 1fr; }
+  .hand-actions { flex-direction: column; }
+  button { width: 100%; }
+}
