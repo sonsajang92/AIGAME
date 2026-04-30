@@ -1,12 +1,7 @@
-/**
- * Combined game logic:
- * - combo validation (analyze/canBeat)
- * - scoring + declaration handling
- */
-
-const DECLARATION_BONUS = {
+export const DECLARATION_BONUS = {
   tichu: 100,
   double: 200,
+  double_tichu: 200,
 };
 
 function rankValue(card) {
@@ -30,7 +25,7 @@ function rankValue(card) {
   return order[rank] ?? -1;
 }
 
-function analyze(cards) {
+export function analyze(cards) {
   if (!Array.isArray(cards) || cards.length === 0) {
     return { valid: false, type: null, value: -1, size: 0 };
   }
@@ -48,7 +43,7 @@ function analyze(cards) {
   if (sameRank) {
     return {
       valid: true,
-      type: cards.length === 2 ? 'pair' : `n-of-kind`,
+      type: cards.length === 2 ? 'pair' : 'n-of-kind',
       value: values[0],
       size: cards.length,
     };
@@ -57,7 +52,7 @@ function analyze(cards) {
   return { valid: false, type: null, value: -1, size: cards.length };
 }
 
-function canBeat(a, b) {
+export function canBeat(a, b) {
   if (!b) return true;
   if (!a || !a.valid || !b.valid) return false;
   if (a.type !== b.type) return false;
@@ -65,16 +60,8 @@ function canBeat(a, b) {
   return a.value > b.value;
 }
 
-/**
- * Card point value rules:
- *  - 5 => 5
- *  - 10, K => 10
- *  - Dragon => 25
- *  - Phoenix => -25
- *  - Others => 0
- */
-function getCardScore(card) {
-  const rank = typeof card === 'string' ? card : card?.rank;
+export function getCardScore(card) {
+  const rank = typeof card === 'string' ? card.slice(0, -1) : card?.rank;
 
   if (rank === '5') return 5;
   if (rank === '10' || rank === 'K') return 10;
@@ -83,16 +70,7 @@ function getCardScore(card) {
   return 0;
 }
 
-/**
- * Saves a tichu declaration in room state.
- *
- * @param {object} room
- * @param {object} params
- * @param {string|number} params.playerId
- * @param {'tichu'|'double'} params.type
- * @param {number} [params.at]
- */
-function declareTichu(room, { playerId, type = 'tichu', at = Date.now() }) {
+export function declareTichu(room, { playerId, type = 'tichu', at = Date.now() }) {
   if (!room.declarations) room.declarations = [];
 
   const declaration = {
@@ -105,22 +83,19 @@ function declareTichu(room, { playerId, type = 'tichu', at = Date.now() }) {
   return declaration;
 }
 
-/**
- * Computes declaration success/fail and team score delta.
- *
- * @param {Array<{playerId:string|number,type:'tichu'|'double',declaredAt:number}>} declarations
- * @param {Array<string|number>} finishOrder first-out to last-out player ids
- * @param {Record<string|number, 0|1>} playerToTeam team index mapping
- */
-function evaluateDeclarations(declarations, finishOrder, playerToTeam) {
+export function evaluateDeclarations(declarations, finishOrder, playerToTeam) {
   const firstOut = finishOrder?.[0];
+  const firstTwoTeams = (finishOrder ?? []).slice(0, 2).map((playerId) => playerToTeam[playerId]);
   const successFail = [];
   const delta = { 0: 0, 1: 0 };
 
   for (const declaration of declarations || []) {
     const bonus = DECLARATION_BONUS[declaration.type] ?? 0;
-    const success = declaration.playerId === firstOut;
     const team = playerToTeam[declaration.playerId];
+    const isDouble = declaration.type === 'double' || declaration.type === 'double_tichu';
+    const success = isDouble
+      ? firstTwoTeams.length === 2 && firstTwoTeams.every((finishedTeam) => finishedTeam === team)
+      : declaration.playerId === firstOut;
     const signed = success ? bonus : -bonus;
 
     if (team === 0 || team === 1) delta[team] += signed;
@@ -137,20 +112,9 @@ function evaluateDeclarations(declarations, finishOrder, playerToTeam) {
   return { successFail, delta };
 }
 
-/**
- * Applies end-of-round declaration score and returns round_end payload fields.
- *
- * @param {object} room
- * @param {Array<string|number>} finishOrder
- * @param {Record<string|number,0|1>} playerToTeam
- */
-function applyRoundEnd(room, finishOrder, playerToTeam) {
+export function applyRoundEnd(room, finishOrder, playerToTeam) {
   const declarations = room.declarations || [];
-  const { successFail, delta } = evaluateDeclarations(
-    declarations,
-    finishOrder,
-    playerToTeam,
-  );
+  const { successFail, delta } = evaluateDeclarations(declarations, finishOrder, playerToTeam);
 
   room.teamScores = room.teamScores || { 0: 0, 1: 0 };
   room.teamScores[0] += delta[0];
@@ -162,13 +126,3 @@ function applyRoundEnd(room, finishOrder, playerToTeam) {
     delta,
   };
 }
-
-module.exports = {
-  analyze,
-  canBeat,
-  getCardScore,
-  declareTichu,
-  evaluateDeclarations,
-  applyRoundEnd,
-  DECLARATION_BONUS,
-};
