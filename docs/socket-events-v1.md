@@ -85,7 +85,7 @@
 
 - `play_cards` 처리 후 해당 플레이어의 손패가 0장이 되면 라운드를 종료한다.
 - 서버는 방 상태를 `ended`로 바꾸고 `round_end`를 보낸다.
-- `round_end.reason`은 현재 `PLAYER_OUT`만 사용한다.
+- `round_end.reason`은 이후 단계에서 확장되며, 현재 구현은 `DOUBLE_WIN` 또는 `THREE_PLAYERS_OUT`을 사용한다.
 - `teamScores`와 `roundDelta`는 아직 실제 계산 전이라 `{ teamA: 0, teamB: 0 }` 뼈대 값으로 보낸다.
 - 클라이언트는 라운드 종료 후 카드 제출/패스 버튼을 비활성화한다.
 
